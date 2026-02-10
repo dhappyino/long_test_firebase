@@ -53,14 +53,14 @@ const router = createRouter({
           component: () => import("../views/dashboard/RehabService.vue"),
         },
         {
-          path: "care",
-          name: "care",
+          path: "care-service",
+          name: "care-service",
           component: () => import("../views/dashboard/CareService.vue"),
         },
         {
-          path: "nutrition",
-          name: "nutrition",
-          component: () => import("../views/dashboard/NutritionService.vue"),
+          path: "medical-service",
+          name: "medical-service",
+          component: () => import("../views/dashboard/MedicalService.vue"),
         },
         {
           path: "billing",
