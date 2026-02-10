@@ -1,236 +1,386 @@
 <template>
-  <div class="medical-home">
-    <!-- 頂部狀態列 -->
-    <header class="top-header">
-      <div class="user-info">
-        <span>[ <strong>照護 營運</strong> ]</span>
-        <span class="logout" @click="handleLogout">登出</span>
+  <div class="medical-layout">
+    <!-- Main Top Navigation -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="app-logo"></span>
+        <h1 class="app-title">醫療護理系統 <span class="version">v2.0</span></h1>
+      </div>
+      
+      <div class="header-right">
+        <!-- Role Switcher -->
+        <div class="role-switcher">
+          <button 
+            :class="['role-btn', { active: activeRole === 'care' }]" 
+            @click="setRole('care')"
+          >
+            照護
+          </button>
+          <span class="divider">|</span>
+          <button 
+            :class="['role-btn', { active: activeRole === 'operations' }]" 
+            @click="setRole('operations')"
+          >
+            營運
+          </button>
+        </div>
+
+        <div class="user-profile">
+          <div class="avatar">U</div>
+          <div class="user-meta">
+            <span class="user-role">{{ activeRole === 'care' ? '臨床照護' : '行政營運' }}</span>
+            <span class="user-name">管理員 Admin</span>
+          </div>
+        </div>
+        <button class="btn-logout" @click="handleLogout" title="登出 Logout">
+          登出
+        </button>
       </div>
     </header>
 
-    <!-- 頂部導覽頁籤 -->
-    <nav class="main-tabs">
-      <router-link to="/medical-home/case-work" class="tab-item" active-class="active">個案作業</router-link>
-      <router-link to="/medical-home/social-work" class="tab-item" active-class="active">社工業務</router-link>
-      <router-link to="/medical-home/nursing" class="tab-item" active-class="active">護理服務</router-link>
-      <router-link to="/medical-home/rehab" class="tab-item" active-class="active">復健服務</router-link>
-      <router-link to="/medical-home/care" class="tab-item" active-class="active">照顧服務</router-link>
-      <router-link to="/medical-home/nutrition" class="tab-item" active-class="active">營養服務</router-link>
-      <router-link to="/medical-home/billing" class="tab-item" active-class="active">資訊&回報</router-link>
-      <router-link to="/medical-home/interdisciplinary" class="tab-item" active-class="active">跨專業單</router-link>
-      <router-link to="/medical-home/quality" class="tab-item" active-class="active">品質指標</router-link>
-    </nav>
-
-    <!-- 篩選列 -->
-    <div class="filter-bar">
-      <span class="location-label">服務中心個案單：</span>
-      <select><option>全部</option></select>
-      <select><option>一級部</option></select>
-      <span class="current-site">| 個案服務中心 |</span>
+    <!-- Project Identity Bar -->
+    <div class="identity-bar">
+      <div class="breadcrumb">
+        個案服務中心 &rsaquo; <strong>儀表板總覽</strong>
+      </div>
+      <div class="site-tag">
+        | 營運中心 | 桃園分院 |
+      </div>
     </div>
 
-    <!-- 主內容區 -->
-    <router-view />
+    <!-- Navigation Tabs (Filtered by Role) -->
+    <nav class="navigation-tabs">
+      <div class="tabs-container">
+        <router-link 
+          v-for="tab in currentTabs" 
+          :key="tab.id"
+          :to="`/medical-home/${tab.id}`" 
+          class="tab-link" 
+          active-class="active"
+        >
+          {{ tab.label }}
+        </router-link>
+      </div>
+    </nav>
+
+    <!-- Main Content Area with Sidebar -->
+    <div class="main-container">
+      <DashboardSidebar 
+        :active-tab="activeTabId" 
+        :active-role="activeRole"
+      />
+      
+      <main class="page-content">
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </main>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router';
-import { getAuth, signOut } from 'firebase/auth';
+import { ref, computed, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import DashboardSidebar from '../components/DashboardSidebar.vue';
 
 const router = useRouter();
-const auth = getAuth();
+const route = useRoute();
 
-const handleLogout = async () => {
-  await signOut(auth);
-  router.push('/');
+const activeRole = ref('care');
+
+const tabsConfig = {
+  care: [
+    { id: 'case-work', label: '個案作業' },
+    { id: 'social-work', label: '社工服務' },
+    { id: 'nursing', label: '護理服務' },
+    { id: 'rehab', label: '復健服務' },
+    { id: 'care-service', label: '照顧服務' },
+    { id: 'medical-service', label: '就醫服務' },
+    { id: 'billing', label: '簽到&核銷' },
+    { id: 'interdisciplinary', label: '跨專業' },
+    { id: 'quality', label: '品質指標' }
+  ],
+  operations: [
+    { id: 'staff', label: '服務人員' },
+    { id: 'admin', label: '行政作業' }
+  ]
 };
+
+const currentTabs = computed(() => tabsConfig[activeRole.value]);
+
+const activeTabId = computed(() => {
+  const parts = route.path.split('/');
+  return parts[parts.length - 1] || 'case-work';
+});
+
+const setRole = (role) => {
+  activeRole.value = role;
+  // Auto-navigate to the first tab of the new role
+  const firstTab = tabsConfig[role][0].id;
+  router.push(`/medical-home/${firstTab}`);
+};
+
+const handleLogout = () => {
+  localStorage.removeItem('token');
+  router.push('/login');
+};
+
+// Sync role with route on first load or changes
+watch(route, (newRoute) => {
+  const tabId = newRoute.path.split('/').pop();
+  if (tabsConfig.operations.find(t => t.id === tabId)) {
+    activeRole.value = 'operations';
+  } else if (tabsConfig.care.find(t => t.id === tabId)) {
+    activeRole.value = 'care';
+  }
+}, { immediate: true });
 </script>
 
 <style scoped>
-.medical-home {
-  font-family: Arial, sans-serif;
-  background-color: #e0e0e0;
-  min-height: 100vh;
-  font-size: 13px;
-  color: #333;
-}
-
-/* 頂部狀態列 */
-.top-header {
-  background-color: #f5f5f5;
-  padding: 5px 20px;
-  display: flex;
-  justify-content: flex-end;
-  border-bottom: 1px solid #ccc;
-}
-.user-info {
-  font-size: 12px;
-}
-.logout {
-  margin-left: 10px;
-  cursor: pointer;
-}
-
-/* 主導覽頁籤 */
-.main-tabs {
-  background-color: #8c8c8c;
-  display: flex;
-  padding: 0 10px;
-}
-.tab-item {
-  padding: 8px 15px;
-  color: white;
-  cursor: pointer;
-  background-color: #8c8c8c;
-  border-right: 1px solid #777;
-}
-.tab-item:hover {
-  background-color: #7a7a7a;
-}
-.tab-item.active {
-  background-color: #b08d8d; /* 藕色 */
-}
-
-/* 篩選列 */
-.filter-bar {
-  background-color: #dcdcdc;
-  padding: 5px 15px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-}
-.current-site {
-  margin-left: auto;
-}
-
-/* 主內容區佈局 */
-.content-container {
-  display: flex;
-  padding: 10px;
-  gap: 15px;
-}
-
-/* 左側統計 */
-.sidebar-stats {
-  width: 140px;
-  flex-shrink: 0;
-}
-.section-title {
-  font-size: 14px;
-  margin-bottom: 10px;
-  font-weight: bold;
-}
-.stats-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.stats-list li {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.stats-list li.divider {
-  border-bottom: 1px solid #bbb;
-  margin: 10px 0;
-}
-.sidebar-links {
-  margin-top: 15px;
-}
-.sidebar-links a {
-  color: #0000ee;
-  text-decoration: none;
-}
-
-/* 中央看板 */
-.main-dashboards {
-  flex-grow: 1;
+.medical-layout {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  min-height: 100vh;
+  background-color: var(--gray-100);
 }
 
-.dashboard-card {
-  background: white;
-  border: 1px solid #ccc;
-  border-radius: 2px;
+/* App Header */
+.app-header {
+  background-color: white;
+  height: 64px;
+  padding: 0 var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  z-index: 10;
 }
 
-.card-header {
-  background-color: #ccb3b3; /* 淺藕色 */
-  padding: 4px 10px;
-  font-weight: bold;
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.app-logo {
+  font-size: 1.5rem;
+}
+
+.app-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.version {
+  font-size: 0.75rem;
+  background: var(--primary-light);
+  color: white;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
+/* Role Switcher */
+.role-switcher {
+  display: flex;
+  align-items: center;
+  background: var(--gray-100);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.role-btn {
+  background: transparent;
+  color: var(--gray-500);
+  padding: 2px 8px;
+  transition: all 0.2s;
+}
+
+.role-btn.active {
+  color: var(--danger);
+}
+
+.role-btn:hover {
+  color: var(--primary);
+}
+
+.divider {
+  margin: 0 4px;
+  color: var(--gray-300);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-right: var(--space-6);
+  border-right: 1px solid var(--gray-300);
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  background: var(--secondary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-role {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--gray-500);
+}
+
+.user-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--gray-800);
+}
+
+.btn-logout {
+  background: transparent;
+  color: var(--gray-600);
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.btn-logout:hover {
+  color: var(--danger);
+}
+
+/* Identity Bar */
+.identity-bar {
+  background-color: var(--gray-200);
+  padding: var(--space-3) var(--space-6);
   display: flex;
   justify-content: space-between;
-}
-.card-header .more {
-  font-weight: normal;
-  text-decoration: underline;
-  cursor: pointer;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--gray-600);
 }
 
-.card-body {
-  padding: 8px;
-}
-.card-body.fixed-height {
-  height: 200px;
-  overflow-y: auto;
+.breadcrumb strong {
+  color: var(--gray-800);
 }
 
-/* 表格樣式 */
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-.data-table th {
-  background-color: #e0e0e0;
-  border: 1px solid #ccc;
-  padding: 4px;
-  text-align: center;
-}
-.data-table td {
-  border: 1px solid #ccc;
-  padding: 4px;
-  text-align: center;
-}
-.no-data {
-  padding: 20px;
-  color: #888;
-}
-.red {
-  color: red;
+/* Navigation Tabs */
+.navigation-tabs {
+  background-color: var(--primary);
+  padding: 0 var(--space-4);
 }
 
-/* 列表樣式 */
-.announcement-list {
-  list-style: none;
-  padding: 0;
-}
-.announcement-list li {
-  padding: 3px 0;
-  border-bottom: 1px dashed #eee;
-}
-.announcement-list .date {
-  margin-right: 15px;
-  color: #666;
-}
-
-/* 分割表格 */
-.split-table {
+.tabs-container {
   display: flex;
-  gap: 10px;
-}
-.table-half {
-  flex: 1;
+  flex-wrap: wrap; /* Allow wrapping for RWD */
+  justify-content: flex-start;
+  gap: 2px;
 }
 
-/* 下方網格 */
-.bottom-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
+.tab-link {
+  padding: var(--space-3) var(--space-4);
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.tab-link:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tab-link.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.15);
+  border-bottom-color: var(--warning);
+}
+
+/* Main Container Layout */
+.main-container {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+/* Page Content */
+.page-content {
+  flex-grow: 1;
+  padding: var(--space-6);
+  overflow-y: auto;
+  background-color: var(--gray-100);
+}
+
+/* Transition Animations */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Mobile Adjustments */
+@media (max-width: 768px) {
+  .app-header {
+    height: auto;
+    padding: var(--space-3) var(--space-4);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+  
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  .app-title span {
+    display: none;
+  }
+  
+  .user-meta, .divider, .role-switcher span {
+    display: none;
+  }
+  
+  .user-profile {
+    padding-right: 0;
+    border-right: none;
+  }
+  
+  .page-content {
+    padding: var(--space-4);
+  }
+
+  .main-container {
+    flex-direction: column;
+  }
 }
 </style>
